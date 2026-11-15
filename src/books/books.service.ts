@@ -1,9 +1,4 @@
-﻿import {
-  Injectable,
-  NotFoundException,
-  ConflictException,
-  BadRequestException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateBookDto } from './dto/create-book.dto';
 import { UpdateBookDto } from './dto/update-book.dto';
@@ -13,56 +8,74 @@ export class BooksService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(createBookDto: CreateBookDto) {
-    const genre = await this.prisma.genre.findUnique({
-      where: { id: createBookDto.genreId },
-    });
-    if (!genre) {
-      throw new BadRequestException(
-        `Genre with ID ${createBookDto.genreId} does not exist`,
-      );
-    }
-
     const existingIsbn = await this.prisma.book.findUnique({
       where: { isbn: createBookDto.isbn },
     });
     if (existingIsbn) {
-      throw new ConflictException(
-        `Book with ISBN '${createBookDto.isbn}' already exists`,
-      );
+      throw new ConflictException(Book with ISBN '' already exists);
+    }
+
+    const genre = await this.prisma.genre.findUnique({
+      where: { id: createBookDto.genreId },
+    });
+    if (!genre) {
+      throw new BadRequestException(Genre with ID  does not exist);
     }
 
     return this.prisma.book.create({
-      data: createBookDto,
+      data: {
+        ...createBookDto,
+        availableCopies: createBookDto.availableCopies ?? createBookDto.totalCopies,
+      },
       include: { genre: true },
     });
   }
 
-  async findAll(genreId?: number, search?: string) {
-    return this.prisma.book.findMany({
-      where: {
-        ...(genreId ? { genreId } : {}),
-        ...(search
-          ? {
-              OR: [
-                { title: { contains: search, mode: 'insensitive' } },
-                { author: { contains: search, mode: 'insensitive' } },
-                { isbn: { contains: search, mode: 'insensitive' } },
-              ],
-            }
-          : {}),
+  async findAll(genreId?: number, search?: string, page = 1, limit = 10) {
+    const skip = (page - 1) * limit;
+    const take = limit;
+
+    const where = {
+      ...(genreId ? { genreId } : {}),
+      ...(search
+        ? {
+            OR: [
+              { title: { contains: search, mode: 'insensitive' as const } },
+              { author: { contains: search, mode: 'insensitive' as const } },
+            ],
+          }
+        : {}),
+    };
+
+    const [data, total] = await Promise.all([
+      this.prisma.book.findMany({
+        where,
+        skip,
+        take,
+        include: { genre: true },
+        orderBy: { id: 'asc' },
+      }),
+      this.prisma.book.count({ where }),
+    ]);
+
+    return {
+      data,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
       },
-      include: { genre: true },
-      orderBy: { title: 'asc' },
-    });
+    };
   }
 
   async findOne(id: number) {
     const book = await this.prisma.book.findUnique({
       where: { id },
-      include: { genre: true },
+      include: { genre: true, reviews: true },
     });
     if (!book) {
-      throw new NotFoundException(`Book with ID ${id} not found`);
+      throw new NotFoundException(Book with ID  not found);
     }
     return book;
   }
@@ -70,14 +83,21 @@ export class BooksService {
   async update(id: number, updateBookDto: UpdateBookDto) {
     await this.findOne(id);
 
+    if (updateBookDto.isbn) {
+      const existingIsbn = await this.prisma.book.findFirst({
+        where: { isbn: updateBookDto.isbn, NOT: { id } },
+      });
+      if (existingIsbn) {
+        throw new ConflictException(Book with ISBN '' already exists);
+      }
+    }
+
     if (updateBookDto.genreId) {
       const genre = await this.prisma.genre.findUnique({
         where: { id: updateBookDto.genreId },
       });
       if (!genre) {
-        throw new BadRequestException(
-          `Genre with ID ${updateBookDto.genreId} does not exist`,
-        );
+        throw new BadRequestException(Genre with ID  does not exist);
       }
     }
 
@@ -90,8 +110,6 @@ export class BooksService {
 
   async remove(id: number) {
     await this.findOne(id);
-    return this.prisma.book.delete({
-      where: { id },
-    });
+    return this.prisma.book.delete({ where: { id } });
   }
 }
