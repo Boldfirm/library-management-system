@@ -12,14 +12,14 @@ export class BooksService {
       where: { isbn: createBookDto.isbn },
     });
     if (existingIsbn) {
-      throw new ConflictException(Book with ISBN '' already exists);
+      throw new ConflictException(`Book with ISBN '${createBookDto.isbn}' already exists`);
     }
 
     const genre = await this.prisma.genre.findUnique({
       where: { id: createBookDto.genreId },
     });
     if (!genre) {
-      throw new BadRequestException(Genre with ID  does not exist);
+      throw new BadRequestException(`Genre with ID ${createBookDto.genreId} does not exist`);
     }
 
     return this.prisma.book.create({
@@ -75,7 +75,7 @@ export class BooksService {
       include: { genre: true, reviews: true },
     });
     if (!book) {
-      throw new NotFoundException(Book with ID  not found);
+      throw new NotFoundException(`Book with ID ${id} not found`);
     }
     return book;
   }
@@ -88,7 +88,7 @@ export class BooksService {
         where: { isbn: updateBookDto.isbn, NOT: { id } },
       });
       if (existingIsbn) {
-        throw new ConflictException(Book with ISBN '' already exists);
+        throw new ConflictException(`Book with ISBN '${updateBookDto.isbn}' already exists`);
       }
     }
 
@@ -97,7 +97,7 @@ export class BooksService {
         where: { id: updateBookDto.genreId },
       });
       if (!genre) {
-        throw new BadRequestException(Genre with ID  does not exist);
+        throw new BadRequestException(`Genre with ID ${updateBookDto.genreId} does not exist`);
       }
     }
 
